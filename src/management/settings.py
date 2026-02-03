@@ -1,11 +1,15 @@
 from functools import lru_cache
 from urllib.parse import quote_plus
-from typing import Optional
+from typing import Optional, Union
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
 
     development: bool
+
+    admin_username: str
+    admin_password: str
 
     postgres_user: str
     postgres_password: str
@@ -38,6 +42,8 @@ class Settings(BaseSettings):
     amnezia_interface: str
     amnezia_config_path: str
 
+    available_protocols: list[str]
+    
     model_config = SettingsConfigDict(
         env_file = ".env",
         extra="ignore"
@@ -52,6 +58,13 @@ class Settings(BaseSettings):
     def postgres_sync_url(self) -> str:
         encoded_password = quote_plus(self.postgres_password)
         return f"postgresql+psycopg2://{self.postgres_user}:{encoded_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"   
+    
+    @field_validator("protocols_enabled", mode="before")
+    @classmethod
+    def split_comma_separated_string(cls, v: Union[str, list[str]]) -> list[str]:
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
 
 @lru_cache
 def get_settings():

@@ -1,14 +1,22 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 
-from src.database.connection import init_database
+from src.management.logger import configure_logger
 from src.api.v1.auth.router import router as auth_router
 from src.api.v1.clients.router import router as clients_router
 from src.api.v1.deps.middlewares.auth import get_current_admin
+from src.database.management.default.admin_data import create_default_admin_user
+from src.database.management.default.protocol_data import create_default_protocols
 
+
+logger = configure_logger("MAIN", "cyan")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await create_default_protocols()
+    await create_default_admin_user()
+
+    logger.info("Инициализация данных успешно завершена.")
     yield
 
 app = FastAPI(
