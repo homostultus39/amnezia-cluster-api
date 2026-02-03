@@ -13,8 +13,8 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 async def get_current_admin(
+    session: SessionDep,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    session: SessionDep = Depends(),
 ) -> AdminUserModel:
     if not credentials or credentials.scheme.lower() != "bearer":
         raise invalid_token()

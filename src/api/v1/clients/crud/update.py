@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -15,9 +15,9 @@ router = APIRouter()
 
 @router.patch("/{peer_id}", response_model=UpdateClientResponse)
 async def update_client(
+    session: SessionDep,
     peer_id: UUID,
     payload: UpdateClientRequest,
-    session: SessionDep = Depends(),
 ) -> UpdateClientResponse:
     """
     Update client peer metadata such as display name or expiration time.

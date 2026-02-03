@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.v1.clients.crud.logger import logger
@@ -15,8 +15,8 @@ clients_service = ClientsService()
 
 @router.delete("/{peer_id}", response_model=DeleteClientResponse)
 async def delete_client(
+    session: SessionDep,
     peer_id: UUID,
-    session: SessionDep = Depends(),
     protocol: str = Query(default="amneziawg", min_length=1, max_length=100),
 ) -> DeleteClientResponse:
     """

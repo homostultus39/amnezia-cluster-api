@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.v1.clients.crud.logger import logger
@@ -19,8 +19,8 @@ clients_service = ClientsService()
 
 @router.post("/", response_model=CreateClientResponse)
 async def create_client(
+    session: SessionDep,
     payload: CreateClientRequest,
-    session: SessionDep = Depends(),
 ) -> CreateClientResponse:
     """
     Create a new client and generate a configuration for the requested app type.

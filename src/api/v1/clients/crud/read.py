@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.v1.clients.crud.logger import logger
@@ -15,7 +15,7 @@ minio_client = MinioClient()
 
 @router.get("/", response_model=list[ClientResponse])
 async def get_clients(
-    session: SessionDep = Depends(),
+    session: SessionDep,
     protocol: str | None = Query(default=None, min_length=1, max_length=100),
 ) -> list[ClientResponse]:
     """
