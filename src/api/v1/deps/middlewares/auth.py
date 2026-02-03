@@ -1,7 +1,6 @@
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import ExpiredSignatureError, InvalidTokenError
-from sqlalchemy import select
 
 from src.api.v1.deps.exceptions.auth import invalid_token, inactive_user
 from src.database.connection import SessionDep

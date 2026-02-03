@@ -8,4 +8,3 @@ router.include_router(create.router)
 router.include_router(read.router)
 router.include_router(update.router)
 router.include_router(delete.router)
-
