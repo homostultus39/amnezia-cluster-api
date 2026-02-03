@@ -45,10 +45,11 @@ class ClientsService:
         session: AsyncSession,
         username: str,
         protocol: str,
+        app_type: str,
         expires_at: Optional[datetime] = None,
     ) -> dict:
         service = self._get_service(protocol)
-        result = await service.create_client(session, username, expires_at)
+        result = await service.create_client(session, username, app_type, expires_at)
         logger.info(f"Client created: {username} on protocol {protocol}")
         return result
 

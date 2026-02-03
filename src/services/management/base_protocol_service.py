@@ -20,6 +20,7 @@ class BaseProtocolService(ABC):
         self,
         session: AsyncSession,
         username: str,
+        app_type: str,
         expires_at: Optional[datetime] = None,
     ) -> dict:
         pass

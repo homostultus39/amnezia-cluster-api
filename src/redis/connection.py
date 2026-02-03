@@ -18,4 +18,3 @@ def get_redis_client() -> Redis:
             decode_responses=True,
         )
     return _redis_client
-

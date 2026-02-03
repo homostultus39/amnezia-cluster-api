@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     jwt_access_token_expire_minutes: int = 15
     jwt_refresh_token_expire_minutes: int = 43200
     jwt_blacklist_ex: int = 3600
+    jwt_secret_key: str
+    jwt_algorithm: str = "HS256"
 
     server_public_host: str
     protocols_enabled: Optional[str] = None

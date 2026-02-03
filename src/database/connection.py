@@ -24,8 +24,7 @@ async def init_database():
         await conn.run_sync(Base.metadata.create_all)
 
 async def get_session() -> AsyncSession:
-    async with sessionmaker as new_session:
+    async with sessionmaker() as new_session:
         yield new_session
-
 
 SessionDep = Annotated(AsyncSession, Depends(get_session))

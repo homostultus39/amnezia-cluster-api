@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.services.management.amnezia_connection import AmneziaConnection
 from src.services.management.base_protocol_service import BaseProtocolService
-from src.database.models import ClientModel, PeerModel, ProtocolModel
+from src.database.models import ClientModel, PeerModel, ProtocolModel, AppType
 from src.management.settings import get_settings
 from src.management.logger import configure_logger
 from src.minio.client import MinioClient
@@ -81,10 +81,12 @@ class AmneziaService(BaseProtocolService):
                     },
                     "online": wg_peer.get("online", False),
                     "expires_at": peer.expires_at.isoformat() if peer.expires_at else None,
+                    "app_type": peer.app_type,
                     "protocol": self.protocol_name,
                 })
 
             client_list.append({
+                "id": str(client.id),
                 "username": client.username,
                 "peers": peers_list,
             })
@@ -131,6 +133,7 @@ class AmneziaService(BaseProtocolService):
         self,
         session: AsyncSession,
         username: str,
+        app_type: str,
         expires_at: Optional[datetime] = None,
     ) -> dict:
         protocol_id = await self._get_protocol_id(session)
@@ -160,6 +163,7 @@ class AmneziaService(BaseProtocolService):
             protocol_id=protocol_id,
             endpoint=f"{settings.server_public_host}:{server_port}",
             expires_at=expires_at,
+            app_type=app_type,
         )
         session.add(peer)
         await session.flush()
@@ -167,15 +171,11 @@ class AmneziaService(BaseProtocolService):
         await self._add_peer_to_config(public_key, allocated_ip)
         await self.connection.sync_wg_config()
 
-        config_uri = await self._generate_config_uri(
-            private_key, public_key, allocated_ip, username, server_port
+        config_payload = await self._generate_config_payload(
+            app_type, private_key, public_key, allocated_ip, username, server_port
         )
 
-        text_config = await self._generate_text_config(
-            private_key, allocated_ip, server_port
-        )
-
-        config_storage = await self._store_configs(peer.id, config_uri, text_config)
+        config_storage = await self._store_config(client.id, config_payload["config"])
 
         await session.commit()
         logger.info(f"Client created: {username} with IP {allocated_ip}")
@@ -183,8 +183,8 @@ class AmneziaService(BaseProtocolService):
         return {
             "id": str(peer.id),
             "public_key": public_key,
-            "config_vpn_uri": config_uri,
-            "config_text": text_config,
+            "config": config_payload["config"],
+            "config_type": config_payload["type"],
             "config_storage": config_storage,
             "protocol": self.protocol_name,
         }
@@ -199,7 +199,7 @@ class AmneziaService(BaseProtocolService):
             return False
 
         await self._remove_peer_from_config(peer.public_key)
-        await self._delete_configs(peer.id)
+        await self._delete_config(peer.client_id)
         await self.connection.sync_wg_config()
 
         await session.delete(peer)
@@ -356,43 +356,54 @@ class AmneziaService(BaseProtocolService):
         logger.debug("Generated text config for AmneziaWG App")
         return text_config
 
-    async def _store_configs(self, peer_id: UUID, config_uri: str, text_config: str) -> dict:
-        prefix = f"configs/{self.protocol_name}/{peer_id}"
-        uri_object = f"{prefix}/config.uri"
-        text_object = f"{prefix}/config.conf"
+    async def _generate_config_payload(
+        self,
+        app_type: str,
+        private_key: str,
+        public_key: str,
+        allowed_ip: str,
+        username: str,
+        server_port: int,
+    ) -> dict:
+        if app_type == AppType.AMNEZIA_VPN.value:
+            config_uri = await self._generate_config_uri(
+                private_key, public_key, allowed_ip, username, server_port
+            )
+            return {
+                "type": AppType.AMNEZIA_VPN.value,
+                "config": config_uri,
+            }
 
-        await self.config_storage.upload_text(uri_object, config_uri, content_type="text/plain")
-        await self.config_storage.upload_text(text_object, text_config, content_type="text/plain")
+        if app_type == AppType.AMNEZIA_WG.value:
+            text_config = await self._generate_text_config(
+                private_key, allowed_ip, server_port
+            )
+            return {
+                "type": AppType.AMNEZIA_WG.value,
+                "config": text_config,
+            }
 
-        uri_url = await self.config_storage.presigned_get_url(uri_object)
-        text_url = await self.config_storage.presigned_get_url(text_object)
+        raise ValueError(f"Unsupported app_type: {app_type}")
+
+    async def _store_config(self, client_id: UUID, config: str) -> dict:
+        object_name = f"configs/{self.protocol_name}/{client_id}"
+
+        await self.config_storage.upload_text(object_name, config, content_type="text/plain")
+        url = await self.config_storage.presigned_get_url(object_name)
 
         return {
             "bucket": self.config_storage.bucket_name,
-            "objects": {
-                "uri": uri_object,
-                "text": text_object,
-            },
-            "urls": {
-                "uri": uri_url,
-                "text": text_url,
-            },
+            "object": object_name,
+            "url": url,
         }
 
-    async def _delete_configs(self, peer_id: UUID) -> None:
-        prefix = f"configs/{self.protocol_name}/{peer_id}"
-        uri_object = f"{prefix}/config.uri"
-        text_object = f"{prefix}/config.conf"
+    async def _delete_config(self, client_id: UUID) -> None:
+        object_name = f"configs/{self.protocol_name}/{client_id}"
 
         try:
-            await self.config_storage.delete_object(uri_object)
+            await self.config_storage.delete_object(object_name)
         except Exception as exc:
-            logger.warning(f"Failed to delete config URI from MinIO: {exc}")
-
-        try:
-            await self.config_storage.delete_object(text_object)
-        except Exception as exc:
-            logger.warning(f"Failed to delete config text from MinIO: {exc}")
+            logger.warning(f"Failed to delete config from MinIO: {exc}")
 
     def _extract_awg_params(self, wg_config: str) -> dict:
         params = {}
