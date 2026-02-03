@@ -1,6 +1,6 @@
 from functools import lru_cache
 from urllib.parse import quote_plus
-from typing import Optional, Union
+from typing import Optional, List, Any
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     amnezia_interface: str
     amnezia_config_path: str
 
-    available_protocols: list[str] = []
+    available_protocols: List[str] = []
     
     model_config = SettingsConfigDict(
         env_file = ".env",
@@ -61,7 +61,7 @@ class Settings(BaseSettings):
     
     @field_validator("available_protocols", mode="before")
     @classmethod
-    def split_comma_separated_string(cls, v: Union[str, list[str]]):
+    def split_comma_separated_string(cls, v: Any):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         if isinstance(v, list):
