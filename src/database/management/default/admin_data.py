@@ -6,4 +6,4 @@ settings = get_settings()
 
 async def create_default_admin_user() -> str:
     async with sessionmaker() as session:
-        await create_admin_user(settings.admin_username, settings.admin_password)
+        await create_admin_user(session, settings.admin_username, settings.admin_password)

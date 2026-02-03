@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     amnezia_interface: str
     amnezia_config_path: str
 
-    available_protocols: list[str]
+    available_protocols: list[str] = []
     
     model_config = SettingsConfigDict(
         env_file = ".env",

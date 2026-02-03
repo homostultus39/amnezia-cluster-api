@@ -6,4 +6,4 @@ settings = get_settings()
 
 async def create_default_protocols() -> str:
     async with sessionmaker() as session:
-        await create_protocols(settings.available_protocols)
+        await create_protocols(session, settings.available_protocols)
