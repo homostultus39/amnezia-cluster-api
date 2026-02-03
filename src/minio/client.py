@@ -5,10 +5,12 @@ from typing import Optional
 
 from minio.error import S3Error
 
+from src.management.logger import configure_logger
 from src.management.settings import get_settings
 from src.minio.connection import get_minio_client
 
 settings = get_settings()
+logger = configure_logger("MinioClient", "cyan")
 
 
 class MinioClient:
@@ -44,6 +46,7 @@ class MinioClient:
             length=len(data),
             content_type=content_type,
         )
+        logger.info(f"Text object '{object_name}' uploaded successfully to bucket '{self.bucket_name}'")
 
     async def upload_bytes(
         self,
@@ -64,6 +67,7 @@ class MinioClient:
     async def delete_object(self, object_name: str) -> None:
         await self._ensure_bucket()
         await self._run(self._client.remove_object, self.bucket_name, object_name)
+        logger.info(f"Object '{object_name}' deleted successfully from bucket '{self.bucket_name}'")
 
     async def presigned_get_url(
         self,

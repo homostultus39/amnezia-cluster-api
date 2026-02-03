@@ -1,6 +1,9 @@
 import hashlib
 
+from src.management.logger import configure_logger
 from src.redis.connection import get_redis_client
+
+logger = configure_logger("RedisClient", "red")
 
 
 class RedisClient:
@@ -21,6 +24,7 @@ class RedisClient:
         """
         key = self._token_key(token)
         await self._client.set(key, "1", ex=ex)
+        logger.info(f"Token blacklisted with TTL {ex}s")
 
     async def is_token_blacklisted(self, token: str) -> bool:
         """

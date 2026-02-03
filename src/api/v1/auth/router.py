@@ -10,6 +10,7 @@ from src.api.v1.deps.exceptions.auth import invalid_credentials, invalid_token
 from src.api.v1.deps.middlewares.auth import bearer_scheme, get_current_admin
 from src.database.connection import SessionDep
 from src.database.models import AdminUserModel, UserStatus
+from src.management.logger import configure_logger
 from src.management.security import (
     create_access_token,
     create_refresh_token,
@@ -19,7 +20,8 @@ from src.management.security import (
 )
 from src.redis.client import RedisClient
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter()
+logger = configure_logger("Authorization", "magenta")
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -56,15 +58,19 @@ async def login(
             max_age=get_token_ttl(refresh_token),
         )
 
+        logger.info(f"User {payload.username} logged in successfully")
         return TokenResponse(access_token=access_token)
-    except HTTPException:
+    except HTTPException as exc:
+        logger.error(f"Login failed for {payload.username}: {exc.detail}")
         raise
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        logger.error(f"Database error during login for {payload.username}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database connection error",
         )
     except Exception as exc:
+        logger.error(f"Unexpected error during login for {payload.username}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Authentication failed: {str(exc)}",
@@ -127,23 +133,29 @@ async def refresh(
             max_age=get_token_ttl(new_refresh_token),
         )
 
+        logger.info(f"Token refreshed successfully for {subject}")
         return TokenResponse(access_token=access_token)
 
-    except HTTPException:
+    except HTTPException as exc:
+        logger.error(f"Token refresh failed: {exc.detail}")
         raise
-    except (ExpiredSignatureError, InvalidTokenError):
+    except (ExpiredSignatureError, InvalidTokenError) as exc:
+        logger.error(f"Invalid token during refresh: {exc}")
         raise invalid_token()
-    except RedisError:
+    except RedisError as exc:
+        logger.error(f"Redis error during refresh: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Cache service unavailable",
         )
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
+        logger.error(f"Database error during refresh: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database connection error",
         )
     except Exception as exc:
+        logger.error(f"Unexpected error during refresh: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Token refresh failed: {str(exc)}",
@@ -183,10 +195,15 @@ async def logout(
 
         response.delete_cookie(key="refresh_token", httponly=True, secure=True, samesite="lax")
 
+        logger.info(f"User {current_admin.username} logged out successfully")
         return {"status": "logged_out"}
-    except RedisError:
+    except RedisError as exc:
+        logger.error(f"Redis error during logout for {current_admin.username}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Cache service unavailable",
         )
+    except Exception as exc:
+        logger.error(f"Unexpected error during logout for {current_admin.username}: {exc}")
+        raise
 

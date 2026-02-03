@@ -91,6 +91,7 @@ class AmneziaService(BaseProtocolService):
                 "peers": peers_list,
             })
 
+        logger.info(f"Retrieved {len(client_list)} clients from AmneziaWG")
         return client_list
 
     def _parse_wg_dump(self, dump_output: str) -> dict:
@@ -196,17 +197,23 @@ class AmneziaService(BaseProtocolService):
         peer = result.scalar_one_or_none()
 
         if not peer:
+            logger.warning(f"Peer {peer_id} not found in database for deletion")
             return False
 
-        await self._remove_peer_from_config(peer.public_key)
-        await self._delete_config(peer.client_id)
-        await self.connection.sync_wg_config()
+        try:
+            await self._remove_peer_from_config(peer.public_key)
+            await self._delete_config(peer.client_id)
+            await self.connection.sync_wg_config()
 
-        await session.delete(peer)
-        await session.commit()
+            await session.delete(peer)
+            await session.commit()
 
-        logger.info(f"Client deleted: {peer.name} ({peer_id})")
-        return True
+            logger.info(f"Client {peer.name} ({peer_id}) deleted successfully from AmneziaWG")
+            return True
+        except Exception as exc:
+            logger.error(f"Failed to delete client {peer_id}: {exc}")
+            await session.rollback()
+            raise
 
     async def _get_protocol_id(self, session: AsyncSession) -> UUID:
         result = await session.execute(

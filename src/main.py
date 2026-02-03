@@ -23,10 +23,14 @@ app = FastAPI(
 app.include_router(
     auth_router,
     prefix="/clients",
-    tags="Clients",
+    tags=["Clients"],
     dependencies=[Depends(get_current_admin)]
 )
-app.include_router(clients_router)
+app.include_router(
+    clients_router,
+    prefix="/auth",
+    tags=["Authorization"]
+)
 
 @app.get("/health")
 async def health_check():

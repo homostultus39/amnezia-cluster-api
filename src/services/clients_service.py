@@ -19,6 +19,7 @@ class ClientsService:
     def _get_service(self, protocol: str) -> BaseProtocolService:
         service = self._services.get(protocol.lower())
         if not service:
+            logger.error(f"Unsupported protocol requested: {protocol}")
             raise ValueError(f"Unsupported protocol: {protocol}")
         return service
 

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
+from src.api.v1.clients.crud.logger import logger
 from src.api.v1.clients.schemas import UpdateClientRequest, UpdateClientResponse
 from src.api.v1.deps.exceptions.clients import peer_not_found
 from src.database.connection import SessionDep
@@ -33,6 +34,7 @@ async def update_client(
         )
 
     if not peer:
+        logger.error(f"Peer {peer_id} not found for update")
         raise peer_not_found(str(peer_id))
 
     try:
@@ -42,12 +44,20 @@ async def update_client(
             peer.expires_at = payload.expires_at
 
         await session.commit()
+        logger.info(f"Peer {peer_id} updated successfully")
         return UpdateClientResponse(status="updated")
-    except SQLAlchemyError:
+    except SQLAlchemyError as exc:
         await session.rollback()
+        logger.error(f"Database error during peer {peer_id} update: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database connection error",
+        )
+    except Exception as exc:
+        logger.error(f"Unexpected error during peer {peer_id} update: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update peer: {str(exc)}",
         )
 
 
