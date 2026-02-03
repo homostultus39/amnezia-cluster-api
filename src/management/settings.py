@@ -1,17 +1,8 @@
 from functools import lru_cache
 from urllib.parse import quote_plus
-from typing import Optional, List, Any, Annotated
-from pydantic import BeforeValidator
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-def parse_comma_separated_list(v: Any) -> List[str]:
-    """Parse comma-separated string or list into a list of strings."""
-    if isinstance(v, str):
-        return [item.strip() for item in v.split(",") if item.strip()]
-    if isinstance(v, list):
-        return v
-    return []
+from typing import Optional, List, Annotated
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict, NoDecode
 
 
 class Settings(BaseSettings):
@@ -52,7 +43,7 @@ class Settings(BaseSettings):
     amnezia_interface: str
     amnezia_config_path: str
 
-    available_protocols: Annotated[List[str], BeforeValidator(parse_comma_separated_list)] = []
+    available_protocols: Annotated[List[str], NoDecode] = []
     
     model_config = SettingsConfigDict(
         env_file = ".env",
@@ -68,6 +59,16 @@ class Settings(BaseSettings):
     def postgres_sync_url(self) -> str:
         encoded_password = quote_plus(self.postgres_password)
         return f"postgresql+psycopg2://{self.postgres_user}:{encoded_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+
+    @field_validator('available_protocols', mode='before')
+    @classmethod
+    def parse_protocols(cls, v):
+        if isinstance(v, str):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        if isinstance(v, list):
+            return v
+        return []
+
 
 @lru_cache
 def get_settings():
