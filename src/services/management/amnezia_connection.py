@@ -1,4 +1,5 @@
 import asyncio
+import docker
 from typing import Optional
 from src.management.settings import get_settings
 from src.management.logger import configure_logger
@@ -16,37 +17,46 @@ class AmneziaConnection:
         self.container_name = container_name or settings.amnezia_container_name
         self.interface = settings.amnezia_interface
         self.config_path = settings.amnezia_config_path
+        try:
+            self.docker_client = docker.from_env()
+        except Exception as exc:
+            logger.error(f"Failed to initialize Docker client: {exc}")
+            raise DockerError(f"Docker client initialization failed: {exc}")
 
     async def run_command(self, cmd: str, check: bool = True) -> tuple[str, str]:
-        full_cmd = ["docker", "exec", self.container_name, "sh", "-c", cmd]
-        logger.debug(f"Executing: {' '.join(full_cmd)}")
+        logger.debug(f"Executing in {self.container_name}: {cmd}")
 
         try:
-            process = await asyncio.create_subprocess_exec(
-                *full_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            container = await asyncio.to_thread(self.docker_client.containers.get, self.container_name)
+            
+            exec_result = await asyncio.to_thread(
+                container.exec_run,
+                cmd=["sh", "-c", cmd],
+                stdout=True,
+                stderr=True,
+                demux=True
             )
-        except FileNotFoundError:
-            logger.error("Docker executable not found. Ensure Docker is installed in the API container.")
-            raise DockerError("Docker executable not found")
+            
+            exit_code, (stdout, stderr) = exec_result
+            stdout_decoded = stdout.decode().strip() if stdout else ""
+            stderr_decoded = stderr.decode().strip() if stderr else ""
+
+            if check and exit_code != 0:
+                logger.error(
+                    f"Command failed with code {exit_code}: {stderr_decoded}"
+                )
+                raise DockerError(
+                    f"Command failed: {stderr_decoded or 'Unknown error'}"
+                )
+
+            return stdout_decoded, stderr_decoded
+
+        except docker.errors.NotFound:
+            logger.error(f"Container {self.container_name} not found")
+            raise DockerError(f"Container {self.container_name} not found")
         except Exception as exc:
-            logger.error(f"Failed to initiate docker command: {exc}")
-            raise DockerError(f"Docker command initiation failed: {exc}")
-
-        stdout, stderr = await process.communicate()
-        stdout_decoded = stdout.decode().strip()
-        stderr_decoded = stderr.decode().strip()
-
-        if check and process.returncode != 0:
-            logger.error(
-                f"Command failed with code {process.returncode}: {stderr_decoded}"
-            )
-            raise DockerError(
-                f"Command failed: {stderr_decoded or 'Unknown error'}"
-            )
-
-        return stdout_decoded, stderr_decoded
+            logger.error(f"Docker API error: {exc}")
+            raise DockerError(f"Docker API error: {exc}")
 
     async def read_file(self, path: str) -> str:
         stdout, _ = await self.run_command(f"cat {path}")
