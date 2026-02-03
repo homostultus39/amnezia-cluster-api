@@ -19,8 +19,28 @@ services:
       retries: 5
   redis:
     image: redis:7-alpine
+    env_file:
+      - .env
     ports:
       - "6379:6379"
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command:
+      - sh
+      - -c
+      - |
+        redis-server \
+          --requirepass "$$REDIS_PASSWORD" \
+          --appendonly yes \
+          --rename-command REPLICAOF "" \
+          --rename-command SLAVEOF "" \
+          --rename-command CONFIG "" \
+          --rename-command DEBUG "" \
+          --rename-command SHUTDOWN "" \
+          --rename-command FLUSHDB "" \
+          --rename-command FLUSHALL "" \
+          --rename-command EVAL "" \
+          --rename-command SCRIPT ""
     volumes:
       - redis_data:/data
     healthcheck:
