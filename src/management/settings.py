@@ -59,13 +59,15 @@ class Settings(BaseSettings):
         encoded_password = quote_plus(self.postgres_password)
         return f"postgresql+psycopg2://{self.postgres_user}:{encoded_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"   
     
-    @field_validator("protocols_enabled", mode="before")
+    @field_validator("available_protocols", mode="before")
     @classmethod
     def split_comma_separated_string(cls, v: Union[str, list[str]]) -> list[str]:
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
-        return v
-
+        if isinstance(v, list):
+            return v
+        return []
+        
 @lru_cache
 def get_settings():
     return Settings()
