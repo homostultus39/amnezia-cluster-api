@@ -55,7 +55,6 @@ services:
     ports:
       - 8000:8000
     restart: always
-    command: sh -c "alembic upgrade head"
     depends_on:
       - postgres
       - redis
