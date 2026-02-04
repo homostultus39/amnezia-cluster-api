@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.services.management.amnezia_connection import AmneziaConnection
 from src.services.management.base_protocol_service import BaseProtocolService
+from src.services.management.amnezia_config_generator import AmneziaConfigGenerator
 from src.database.models import ClientModel, PeerModel, ProtocolModel, AppType
 from src.management.settings import get_settings
 from src.management.logger import configure_logger
@@ -47,6 +48,7 @@ class AmneziaService(BaseProtocolService):
         self.connection = AmneziaConnection()
         self._protocol_name = "amneziawg"
         self.config_storage = MinioClient()
+        self.config_generator = AmneziaConfigGenerator()
 
     @property
     def protocol_name(self) -> str:
@@ -292,35 +294,22 @@ class AmneziaService(BaseProtocolService):
         wg_config = await self.connection.read_wg_config()
         awg_params = self._extract_awg_params(wg_config)
 
-        server_config_json = {
-            "containers": [
-                {
-                    "awg": {
-                        **awg_params,
-                        "client_priv_key": private_key,
-                        "client_pub_key": public_key,
-                        "server_pub_key": server_public_key,
-                        "psk_key": psk,
-                        "client_ip": allowed_ip.split("/")[0],
-                        "allowed_ips": "0.0.0.0/0, ::/0",
-                        "persistent_keep_alive": "25",
-                    },
-                    "container": settings.amnezia_container_name,
-                }
-            ],
-            "defaultContainer": settings.amnezia_container_name,
-            "description": f"{username} | AmneziaWG",
-            "dns1": "1.1.1.1",
-            "dns2": "1.0.0.1",
-            "hostName": settings.server_public_host,
-        }
+        client_ip = (
+            allowed_ip if allowed_ip.endswith("/32") else f"{allowed_ip.split('/')[0]}/32"
+        )
 
-        json_str = json.dumps(server_config_json, separators=(",", ":"))
-        compressed = zlib.compress(json_str.encode(), level=8)
-
-        encoded = base64.urlsafe_b64encode(compressed).decode().rstrip("=")
-
-        return f"vpn://{encoded}"
+        return self.config_generator.generate_amnezia_vpn_config(
+            client_private_key=private_key,
+            client_public_key=public_key,
+            server_public_key=server_public_key,
+            psk=psk,
+            client_ip=client_ip,
+            awg_params=awg_params,
+            server_endpoint=settings.server_public_host,
+            primary_dns="1.1.1.1",
+            secondary_dns="1.0.0.1",
+            container_name=settings.amnezia_container_name,
+        )
 
     async def _generate_text_config(
         self, private_key: str, allowed_ip: str, server_port: int

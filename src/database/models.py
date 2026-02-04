@@ -3,7 +3,7 @@ import uuid
 from enum import Enum
 from datetime import datetime
 from sqlalchemy.orm import mapped_column, Mapped, relationship
-from sqlalchemy import func, String, DateTime, Boolean, UUID, ForeignKey, JSON
+from sqlalchemy import func, String, DateTime, Boolean, UUID, ForeignKey, JSON, UniqueConstraint
 
 from src.database.base import Base
 
@@ -55,10 +55,12 @@ class AppType(Enum):
 
 class PeerModel(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "peers"
+    __table_args__ = (
+        UniqueConstraint("client_id", "app_type", name="uq_peers_client_app_type"),
+    )
     
-    app_type: Mapped[AppType] = mapped_column(String(50), default=AppType.AMNEZIA_VPN.value, nullable=False)
-    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), index=True, unique=True, nullable=False)
+    app_type: Mapped[AppType] = mapped_column(String(50), default=AppType.AMNEZIA_VPN.value, nullable=False, index=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("clients.id"), nullable=False, index=True)
     allowed_ips: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     public_key: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
     protocol_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("protocols.id"), nullable=False)
