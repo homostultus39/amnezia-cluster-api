@@ -96,20 +96,21 @@ class AmneziaConfigGenerator:
         }
 
         config = {
-            "hostName": server_endpoint,
-            "defaultContainer": container_name,
-            "dns1": primary_dns,
-            "dns2": secondary_dns,
             "containers": [
                 {
-                    "container": container_name,
                     "awg": awg_config,
+                    "container": container_name,
                 }
             ],
+            "defaultContainer": container_name,
         }
 
         if description:
             config["description"] = description
+
+        config["dns1"] = primary_dns
+        config["dns2"] = secondary_dns
+        config["hostName"] = server_endpoint
 
         return config
 
