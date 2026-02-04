@@ -62,7 +62,7 @@ class PeerModel(Base, UUIDMixin, TimestampMixin):
     allowed_ips: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     public_key: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
     protocol_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("protocols.id"), nullable=False)
-    endpoint: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(255), nullable=False)
     last_handshake: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
     is_online: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
