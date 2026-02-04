@@ -20,7 +20,6 @@ class ConfigStorage(BaseModel):
 class PeerResponse(BaseModel):
     id: str
     public_key: str
-    name: str
     allowed_ips: list[str]
     endpoint: Optional[str]
     last_handshake: Optional[datetime]
@@ -55,7 +54,6 @@ class CreateClientResponse(BaseModel):
 
 
 class UpdateClientRequest(BaseModel):
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
     expires_at: Optional[datetime] = None
 
 

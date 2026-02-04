@@ -73,7 +73,6 @@ class AmneziaService(BaseProtocolService):
                 peers_list.append({
                     "id": str(peer.id),
                     "public_key": peer.public_key,
-                    "name": peer.name,
                     "allowed_ips": peer.allowed_ips,
                     "endpoint": wg_peer.get("endpoint"),
                     "last_handshake": wg_peer.get("last_handshake"),
@@ -160,7 +159,6 @@ class AmneziaService(BaseProtocolService):
 
         peer = PeerModel(
             client_id=client.id,
-            name=username,
             allowed_ips=[allocated_ip],
             public_key=public_key,
             protocol_id=protocol_id,
@@ -210,7 +208,7 @@ class AmneziaService(BaseProtocolService):
             await session.delete(peer)
             await session.commit()
 
-            logger.info(f"Client {peer.name} ({peer_id}) deleted successfully from AmneziaWG")
+            logger.info(f"Peer {peer_id} deleted successfully from AmneziaWG")
             return True
         except Exception as exc:
             logger.error(f"Failed to delete client {peer_id}: {exc}")

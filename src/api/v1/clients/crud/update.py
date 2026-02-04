@@ -20,7 +20,7 @@ async def update_client(
     payload: UpdateClientRequest,
 ) -> UpdateClientResponse:
     """
-    Update client peer metadata such as display name or expiration time.
+    Update client peer metadata such as expiration time.
     """
     try:
         result = await session.execute(
@@ -38,8 +38,6 @@ async def update_client(
         raise peer_not_found(str(peer_id))
 
     try:
-        if payload.name is not None:
-            peer.name = payload.name
         if payload.expires_at is not None:
             peer.expires_at = payload.expires_at
 
