@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.services.management.amnezia_connection import AmneziaConnection
 from src.services.management.base_protocol_service import BaseProtocolService
 from src.services.management.amnezia_config_generator import AmneziaConfigGenerator
+from src.services.management.schemas import JunkPacketConfig
 from src.database.models import ClientModel, PeerModel, ProtocolModel, AppType
 from src.management.settings import get_settings
 from src.management.logger import configure_logger
@@ -296,7 +297,9 @@ class AmneziaService(BaseProtocolService):
             allowed_ip if allowed_ip.endswith("/32") else f"{allowed_ip.split('/')[0]}/32"
         )
 
-        return self.config_generator.generate_amnezia_vpn_config(
+        logger.debug(f"AWG params for {username}: {awg_params}")
+
+        config_uri = self.config_generator.generate_amnezia_vpn_config(
             client_private_key=private_key,
             client_public_key=public_key,
             server_public_key=server_public_key,
@@ -308,6 +311,9 @@ class AmneziaService(BaseProtocolService):
             secondary_dns="1.0.0.1",
             container_name=settings.amnezia_container_name,
         )
+
+        logger.debug(f"Generated config URI for {username}, length: {len(config_uri)}")
+        return config_uri
 
     async def _generate_text_config(
         self, private_key: str, allowed_ip: str, server_port: int
@@ -393,7 +399,27 @@ class AmneziaService(BaseProtocolService):
             logger.warning(f"Failed to delete config from MinIO: {exc}")
 
     def _extract_awg_params(self, wg_config: str) -> dict:
-        params = {}
+        default_config = JunkPacketConfig()
+
+        params = {
+            "Jc": str(default_config.jc),
+            "Jmin": str(default_config.jmin),
+            "Jmax": str(default_config.jmax),
+            "S1": str(default_config.s1),
+            "S2": str(default_config.s2),
+            "S3": str(default_config.s3),
+            "S4": str(default_config.s4),
+            "H1": str(default_config.h1),
+            "H2": str(default_config.h2),
+            "H3": str(default_config.h3),
+            "H4": str(default_config.h4),
+            "I1": str(default_config.i1),
+            "I2": str(default_config.i2),
+            "I3": str(default_config.i3),
+            "I4": str(default_config.i4),
+            "I5": str(default_config.i5),
+        }
+
         param_mapping = {
             "Jc": r"Jc\s*=\s*(\d+)",
             "Jmin": r"Jmin\s*=\s*(\d+)",
@@ -413,9 +439,12 @@ class AmneziaService(BaseProtocolService):
             "I5": r"I5\s*=\s*(\d+)",
         }
 
+        extracted_count = 0
         for key, pattern in param_mapping.items():
             match = re.search(pattern, wg_config)
             if match:
                 params[key] = match.group(1)
+                extracted_count += 1
 
+        logger.debug(f"Extracted {extracted_count}/16 AWG params from container config, using defaults for remaining")
         return params
