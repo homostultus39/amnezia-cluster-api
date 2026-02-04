@@ -292,26 +292,23 @@ class AmneziaService(BaseProtocolService):
         wg_config = await self.connection.read_wg_config()
         awg_params = self._extract_awg_params(wg_config)
 
-        client_config = {
-            "PrivateKey": private_key,
-            "Address": allowed_ip,
-            "DNS": "1.1.1.1, 1.0.0.1",
-            **awg_params,
-        }
-
         server_config_json = {
             "containers": [
                 {
                     "awg": {
                         **awg_params,
-                        "last_config": json.dumps(client_config),
-                        "port": str(server_port),
-                        "transport_proto": "udp",
+                        "client_priv_key": private_key,
+                        "client_pub_key": public_key,
+                        "server_pub_key": server_public_key,
+                        "psk_key": psk,
+                        "client_ip": allowed_ip.split("/")[0],
+                        "allowed_ips": "0.0.0.0/0, ::/0",
+                        "persistent_keep_alive": "25",
                     },
-                    "container": "amnezia-awg",
+                    "container": settings.amnezia_container_name,
                 }
             ],
-            "defaultContainer": "amnezia-awg",
+            "defaultContainer": settings.amnezia_container_name,
             "description": f"{username} | AmneziaWG",
             "dns1": "1.1.1.1",
             "dns2": "1.0.0.1",
@@ -319,15 +316,11 @@ class AmneziaService(BaseProtocolService):
         }
 
         json_str = json.dumps(server_config_json, separators=(",", ":"))
-        compressed = zlib.compress(json_str.encode(), level=9)
+        compressed = zlib.compress(json_str.encode(), level=8)
 
-        size_bytes = len(json_str).to_bytes(4, byteorder="big")
-        payload = size_bytes + compressed
+        encoded = base64.urlsafe_b64encode(compressed).decode().rstrip("=")
 
-        encoded = base64.b64encode(payload).decode()
-        uri_safe = encoded.replace("+", "-").replace("/", "_").rstrip("=")
-
-        return f"vpn://{uri_safe}"
+        return f"vpn://{encoded}"
 
     async def _generate_text_config(
         self, private_key: str, allowed_ip: str, server_port: int
@@ -420,10 +413,17 @@ class AmneziaService(BaseProtocolService):
             "Jmax": r"Jmax\s*=\s*(\d+)",
             "S1": r"S1\s*=\s*(\d+)",
             "S2": r"S2\s*=\s*(\d+)",
+            "S3": r"S3\s*=\s*(\d+)",
+            "S4": r"S4\s*=\s*(\d+)",
             "H1": r"H1\s*=\s*(\d+)",
             "H2": r"H2\s*=\s*(\d+)",
             "H3": r"H3\s*=\s*(\d+)",
             "H4": r"H4\s*=\s*(\d+)",
+            "I1": r"I1\s*=\s*(\d+)",
+            "I2": r"I2\s*=\s*(\d+)",
+            "I3": r"I3\s*=\s*(\d+)",
+            "I4": r"I4\s*=\s*(\d+)",
+            "I5": r"I5\s*=\s*(\d+)",
         }
 
         for key, pattern in param_mapping.items():
