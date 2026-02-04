@@ -3,6 +3,7 @@ import json
 import zlib
 import base64
 import ipaddress
+import random
 from datetime import datetime
 from typing import Optional
 from uuid import UUID
@@ -293,6 +294,13 @@ class AmneziaService(BaseProtocolService):
         wg_config = await self.connection.read_wg_config()
         awg_params = self._extract_awg_params(wg_config)
 
+        subnet_match = re.search(r"Address\s*=\s*([\d\.]+)/\d+", wg_config)
+        if subnet_match:
+            subnet_base = subnet_match.group(1).rsplit('.', 1)[0]
+            subnet_address = f"{subnet_base}.0"
+        else:
+            subnet_address = "10.8.1.0"
+
         client_ip = (
             allowed_ip if allowed_ip.endswith("/32") else f"{allowed_ip.split('/')[0]}/32"
         )
@@ -311,7 +319,8 @@ class AmneziaService(BaseProtocolService):
             primary_dns="1.1.1.1",
             secondary_dns="1.0.0.1",
             container_name=settings.amnezia_container_name,
-            description=f"AmneziaWG - {username}",
+            description=username,
+            subnet_address=subnet_address,
         )
 
         try:
@@ -451,7 +460,15 @@ class AmneziaService(BaseProtocolService):
         for key, pattern in param_mapping.items():
             match = re.search(pattern, wg_config)
             if match:
-                params[key] = match.group(1)
+                value = match.group(1)
+
+                if key in ["H1", "H2", "H3", "H4"]:
+                    first_value = int(value)
+                    second_value = random.randint(first_value, 2**32 - 1)
+                    params[key] = f"{first_value}-{second_value}"
+                else:
+                    params[key] = value
+
                 extracted_count += 1
 
         logger.debug(f"Extracted {extracted_count}/16 AWG params from container config, using defaults for remaining")

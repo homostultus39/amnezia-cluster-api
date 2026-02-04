@@ -19,6 +19,7 @@ class AmneziaConfigGenerator:
         secondary_dns: str,
         container_name: str,
         description: str = "",
+        subnet_address: str = "10.8.1.0",
     ) -> str:
         config_dict = self._build_config_dict(
             client_private_key=client_private_key,
@@ -33,6 +34,7 @@ class AmneziaConfigGenerator:
             secondary_dns=secondary_dns,
             container_name=container_name,
             description=description,
+            subnet_address=subnet_address,
         )
         return self._create_vpn_link(config_dict)
 
@@ -51,6 +53,7 @@ class AmneziaConfigGenerator:
         secondary_dns: str,
         container_name: str,
         description: str = "",
+        subnet_address: str = "10.8.1.0",
     ) -> dict:
         awg_config = {
             "client_priv_key": client_private_key,
@@ -62,6 +65,8 @@ class AmneziaConfigGenerator:
             "persistent_keep_alive": "25",
             **awg_params,
             "port": str(server_port),
+            "protocol_version": "2",
+            "subnet_address": subnet_address,
             "transport_proto": "udp",
         }
 
