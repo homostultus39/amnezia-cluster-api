@@ -312,7 +312,13 @@ class AmneziaService(BaseProtocolService):
             container_name=settings.amnezia_container_name,
         )
 
-        logger.debug(f"Generated config URI for {username}, length: {len(config_uri)}")
+        try:
+            self.config_generator.decode_vpn_link(config_uri)
+            logger.debug(f"Config validated for {username}, length: {len(config_uri)}")
+        except Exception as e:
+            logger.error(f"Config validation failed for {username}: {e}")
+            raise
+
         return config_uri
 
     async def _generate_text_config(
