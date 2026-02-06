@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.services.amnezia_service import AmneziaService
 from src.services.management.base_protocol_service import BaseProtocolService
 from src.database.models import ClientModel, AppType
-from src.database.management.operations.client import get_client_by_username, create_client
+from src.database.management.operations.client import get_client_by_username, get_client_by_id, create_client, delete_client as delete_client_op
 from src.management.logger import configure_logger
 
 logger = configure_logger("ClientsService", "yellow")
@@ -90,14 +90,30 @@ class ClientsService:
             }
         }
 
-    async def delete_client(self, session: AsyncSession, peer_id: UUID, protocol: str = "amneziawg") -> bool:
+    async def delete_client(self, session: AsyncSession, client_id: UUID, protocol: str = "amneziawg") -> bool:
         service = self._get_service(protocol)
-        deleted = await service.delete_client(session, peer_id)
+
+        client = await get_client_by_id(session, client_id)
+        if not client:
+            logger.warning(f"Client {client_id} not found")
+            return False
+
+        for peer in client.peers:
+            try:
+                await service._remove_peer_from_config(peer.public_key)
+                await service._delete_config(peer.client_id)
+            except Exception as exc:
+                logger.warning(f"Failed to cleanup peer {peer.id} config: {exc}")
+
+        await service.connection.sync_wg_config()
+
+        deleted = await delete_client_op(session, client_id)
+        await session.commit()
 
         if deleted:
-            logger.info(f"Client deleted: {peer_id}")
+            logger.info(f"Client deleted: {client_id}")
         else:
-            logger.warning(f"Client not found: {peer_id}")
+            logger.warning(f"Client {client_id} not found")
         return deleted
 
     async def cleanup_expired_clients(self, session: AsyncSession) -> int:

@@ -46,6 +46,16 @@ async def update_client_expires_at(session: AsyncSession, client_id: UUID, expir
     return client
 
 
+async def delete_client(session: AsyncSession, client_id: UUID) -> bool:
+    client = await get_client_by_id(session, client_id)
+    if not client:
+        return False
+
+    await session.delete(client)
+    await session.flush()
+    return True
+
+
 async def get_expired_clients(session: AsyncSession, protocol_id: UUID) -> list[ClientModel]:
     result = await session.execute(
         select(ClientModel).where(
