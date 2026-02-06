@@ -6,8 +6,8 @@ from src.api.v1.peers.logger import logger
 from src.api.v1.peers.schemas import PeerResponse
 from src.database.connection import SessionDep
 from src.database.management.operations.protocol import get_protocol_by_name
-from src.database.management.operations.peer import get_all_peers_by_protocol
-from src.database.management.operations.client import get_client_by_id
+from src.database.management.operations.peer import get_all_peers_by_protocol_with_client
+from src.database.management.operations.client import get_client_by_id_with_peers
 from src.services.utils.config_storage import get_config_object_name
 from src.minio.client import MinioClient
 from src.services.amnezia_service import AmneziaService
@@ -35,7 +35,7 @@ async def get_peers(
                 detail=f"Protocol {protocol} not found",
             )
 
-        peers = await get_all_peers_by_protocol(session, protocol_model.id)
+        peers = await get_all_peers_by_protocol_with_client(session, protocol_model.id)
 
         wg_dump = await amnezia_service.connection.get_wg_dump()
         peers_data = amnezia_service._parse_wg_dump(wg_dump)
@@ -98,7 +98,7 @@ async def get_client_peers(
     Retrieve all peers for a specific client.
     """
     try:
-        client = await get_client_by_id(session, client_id)
+        client = await get_client_by_id_with_peers(session, client_id)
 
         if not client:
             raise HTTPException(

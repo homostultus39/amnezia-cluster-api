@@ -5,7 +5,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from src.api.v1.peers.logger import logger
 from src.api.v1.peers.schemas import UpdatePeerRequest, PeerResponse
 from src.database.connection import SessionDep
-from src.database.management.operations.peer import get_peer_by_id
+from src.database.management.operations.peer import get_peer_by_id_with_client
 from src.services.utils.config_storage import get_config_object_name
 from src.minio.client import MinioClient
 from src.services.peers_service import PeersService
@@ -27,7 +27,7 @@ async def update_peer(
     Update a peer by removing the old configuration and creating a new one.
     """
     try:
-        peer = await get_peer_by_id(session, peer_id)
+        peer = await get_peer_by_id_with_client(session, peer_id)
 
         if not peer:
             raise HTTPException(

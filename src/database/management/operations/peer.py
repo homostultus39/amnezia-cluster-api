@@ -1,5 +1,6 @@
 from uuid import UUID
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.database.models import PeerModel
@@ -8,6 +9,18 @@ from src.database.models import PeerModel
 async def get_peer_by_id(session: AsyncSession, peer_id: UUID) -> PeerModel | None:
     result = await session.execute(
         select(PeerModel).where(PeerModel.id == peer_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_peer_by_id_with_client(
+    session: AsyncSession,
+    peer_id: UUID
+) -> PeerModel | None:
+    result = await session.execute(
+        select(PeerModel)
+        .options(selectinload(PeerModel.client))
+        .where(PeerModel.id == peer_id)
     )
     return result.scalar_one_or_none()
 
@@ -26,9 +39,33 @@ async def get_all_peers_by_protocol(session: AsyncSession, protocol_id: UUID) ->
     return list(result.scalars().all())
 
 
+async def get_all_peers_by_protocol_with_client(
+    session: AsyncSession,
+    protocol_id: UUID
+) -> list[PeerModel]:
+    result = await session.execute(
+        select(PeerModel)
+        .options(selectinload(PeerModel.client))
+        .where(PeerModel.protocol_id == protocol_id)
+    )
+    return list(result.scalars().all())
+
+
 async def get_peers_by_client_id(session: AsyncSession, client_id: UUID) -> list[PeerModel]:
     result = await session.execute(
         select(PeerModel).where(PeerModel.client_id == client_id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_peers_by_client_id_with_client(
+    session: AsyncSession,
+    client_id: UUID
+) -> list[PeerModel]:
+    result = await session.execute(
+        select(PeerModel)
+        .options(selectinload(PeerModel.client))
+        .where(PeerModel.client_id == client_id)
     )
     return list(result.scalars().all())
 
