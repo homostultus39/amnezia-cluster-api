@@ -8,8 +8,8 @@ from src.api.v1.auth.router import router as auth_router
 from src.api.v1.clients.router import router as clients_router
 from src.api.v1.peers.router import router as peers_router
 from src.api.v1.server.router import router as server_router
-from src.api.v1.deps.middlewares.auth import get_current_admin
-from src.database.management.default.admin_data import create_default_admin_user
+from src.api.v1.deps.middlewares.auth import get_current_api_key
+from src.database.management.default.api_key_data import create_default_api_key
 from src.database.management.default.protocol_data import create_default_protocols
 
 
@@ -29,9 +29,9 @@ async def lifespan(app: FastAPI):
     logger.info("Creating default protocols...")
     await create_default_protocols()
     logger.info("Default protocols created successfully.")
-    logger.info("Creating default admin user...")
-    await create_default_admin_user()
-    logger.info("Default admin user created successfully.")
+    logger.info("Creating default API key...")
+    await create_default_api_key()
+    logger.info("Default API key created successfully.")
     logger.info("Initialization completed successfully.")
     yield
 
@@ -53,17 +53,17 @@ app.include_router(
     clients_router,
     prefix="/clients",
     tags=["Clients"],
-    dependencies=[Depends(get_current_admin)]
+    dependencies=[Depends(get_current_api_key)]
 )
 
 app.include_router(
     peers_router,
-    dependencies=[Depends(get_current_admin)]
+    dependencies=[Depends(get_current_api_key)]
 )
 
 app.include_router(
     server_router,
-    dependencies=[Depends(get_current_admin)]
+    dependencies=[Depends(get_current_api_key)]
 )
 
 @app.get("/health")

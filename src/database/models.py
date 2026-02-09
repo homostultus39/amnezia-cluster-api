@@ -28,16 +28,10 @@ class TimestampMixin:
         nullable=False
     )
 
-class UserStatus(Enum):
-    ACTIVE = "active"
-    REVOKED = "revoked"
+class APIKeyModel(Base, UUIDMixin, TimestampMixin):
+    __tablename__ = "api_keys"
 
-class AdminUserModel(Base, UUIDMixin, TimestampMixin):
-    __tablename__ = "admins"
-
-    username: Mapped[str] = mapped_column(String(255), index=True, unique=True, nullable=False)
-    pwd_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
-    user_status: Mapped[UserStatus] = mapped_column(String(50), default=UserStatus.ACTIVE.value, nullable=False)
+    api_key_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
 
 class ProtocolModel(Base, UUIDMixin):
     __tablename__ = "protocols"

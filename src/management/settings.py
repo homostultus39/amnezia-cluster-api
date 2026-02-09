@@ -9,9 +9,6 @@ class Settings(BaseSettings):
 
     development: bool
 
-    admin_username: str
-    admin_password: str
-
     postgres_user: str
     postgres_password: str
     postgres_host: str
@@ -31,11 +28,7 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     minio_presigned_expires_seconds: int = 3600
 
-    jwt_access_token_expire_minutes: int = 15
-    jwt_refresh_token_expire_minutes: int = 43200
-    jwt_blacklist_ex: int = 3600
-    jwt_secret_key: str
-    jwt_algorithm: str = "HS256"
+    admin_api_key: str | None = None
 
     server_public_host: str
     server_display_name: str = "AmneziaWG Server"
@@ -70,14 +63,6 @@ class Settings(BaseSettings):
     def postgres_sync_url(self) -> str:
         encoded_password = quote_plus(self.postgres_password)
         return f"postgresql+psycopg2://{self.postgres_user}:{encoded_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
-
-    @property
-    def cookie_secure(self) -> bool:
-        return not self.development
-
-    @property
-    def cookie_samesite(self) -> str:
-        return "lax" if self.development else "strict"
 
     @field_validator('available_protocols', mode='before')
     @classmethod

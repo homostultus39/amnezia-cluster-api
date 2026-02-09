@@ -6,7 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from src.database.base import Base
-from src.database.models import AdminUserModel, ClientModel, PeerModel, ProtocolModel
+from src.database.models import APIKeyModel, ClientModel, PeerModel, ProtocolModel
 from src.management.settings import get_settings
 
 settings = get_settings()
