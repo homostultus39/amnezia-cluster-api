@@ -1,0 +1,27 @@
+protocols:
+  amneziawg2:
+    service_class: "src.services.protocols.amneziawg2.amneziawg2_service.AmneziaWG2Service"
+    enabled: true
+    container_name: "amnezia-awg2"
+    interface: "awg0"
+    config_path: "/opt/amnezia/awg"
+    default_subnet_address: "10.8.1.0"
+    primary_dns: "1.1.1.1"
+    secondary_dns: "1.0.0.1"
+    awg_junk_params:
+      Jc: "5"
+      Jmin: "10"
+      Jmax: "50"
+      S1: "0"
+      S2: "0"
+      S3: "0"
+      S4: "0"
+      H1: ""
+      H2: ""
+      H3: ""
+      H4: ""
+      I1: ""
+      I2: ""
+      I3: ""
+      I4: ""
+      I5: ""

@@ -8,8 +8,6 @@ from src.api.v1.clients.router import router as clients_router
 from src.api.v1.peers.router import router as peers_router
 from src.api.v1.server.router import router as server_router
 from src.api.v1.deps.middlewares.auth import get_current_api_key
-from src.database.management.default.api_key_data import create_default_api_key
-from src.database.management.default.protocol_data import create_default_protocols
 
 
 logger = configure_logger("MAIN", "cyan")
@@ -26,10 +24,10 @@ async def lifespan(app: FastAPI):
     run_migrations()
     logger.info("Migrations applied successfully.")
     logger.info("Creating default protocols...")
-    await create_default_protocols()
+    # await create_default_protocols()
     logger.info("Default protocols created successfully.")
     logger.info("Creating default API key...")
-    await create_default_api_key()
+    # await create_default_api_key()
     logger.info("Default API key created successfully.")
     logger.info("Initialization completed successfully.")
     yield

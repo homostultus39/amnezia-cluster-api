@@ -1,11 +1,17 @@
 import base64
 import json
-import zlib
 import struct
+import zlib
 from collections import OrderedDict
+from typing import Any
+
+from src.services.management.config_generator import ConfigGenerator
 
 
-class AmneziaConfigGenerator:
+class AmneziaWG2ConfigGenerator(ConfigGenerator):
+    def generate_vpn_config(self, **kwargs: Any) -> str:
+        return self.generate_amnezia_vpn_config(**kwargs)
+
     def generate_amnezia_vpn_config(
         self,
         *,
@@ -78,10 +84,26 @@ class AmneziaConfigGenerator:
         )
 
         last_config = OrderedDict()
-
-        for key in ["H1", "H2", "H3", "H4", "I1", "I2", "I3", "I4", "I5", "Jc", "Jmax", "Jmin", "S1", "S2", "S3", "S4"]:
+        for key in [
+            "H1",
+            "H2",
+            "H3",
+            "H4",
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "Jc",
+            "Jmax",
+            "Jmin",
+            "S1",
+            "S2",
+            "S3",
+            "S4",
+        ]:
             last_config[key] = awg_params.get(key, "")
-        
+
         last_config["allowed_ips"] = ["0.0.0.0/0", "::/0"]
         last_config["clientId"] = client_public_key
         last_config["client_ip"] = client_ip_plain
@@ -96,9 +118,26 @@ class AmneziaConfigGenerator:
         last_config["server_pub_key"] = server_public_key
 
         awg_config = OrderedDict()
-        for key in ["H1", "H2", "H3", "H4", "I1", "I2", "I3", "I4", "I5", "Jc", "Jmax", "Jmin", "S1", "S2", "S3", "S4"]:
+        for key in [
+            "H1",
+            "H2",
+            "H3",
+            "H4",
+            "I1",
+            "I2",
+            "I3",
+            "I4",
+            "I5",
+            "Jc",
+            "Jmax",
+            "Jmin",
+            "S1",
+            "S2",
+            "S3",
+            "S4",
+        ]:
             awg_config[key] = awg_params.get(key, "")
-        
+
         awg_config["last_config"] = json.dumps(last_config, indent=4)
         awg_config["port"] = str(server_port)
         awg_config["protocol_version"] = "2"
@@ -107,10 +146,7 @@ class AmneziaConfigGenerator:
 
         config = OrderedDict()
         config["containers"] = [
-            OrderedDict([
-                ("awg", awg_config),
-                ("container", container_name)
-            ])
+            OrderedDict([("awg", awg_config), ("container", container_name)])
         ]
         config["defaultContainer"] = container_name
         if description:
@@ -125,8 +161,9 @@ class AmneziaConfigGenerator:
         json_str = json.dumps(data, indent=4).encode("utf-8")
         header = struct.pack(">I", len(json_str))
         compressed_data = zlib.compress(json_str, level=8)
-
-        encoded = base64.urlsafe_b64encode(header + compressed_data).decode("utf-8").rstrip("=")
+        encoded = (
+            base64.urlsafe_b64encode(header + compressed_data).decode("utf-8").rstrip("=")
+        )
         return f"vpn://{encoded}"
 
     def decode_vpn_link(self, vpn_link: str) -> dict:
@@ -189,4 +226,3 @@ class AmneziaConfigGenerator:
             f"Endpoint = {server_endpoint}:{server_port}\n"
             f"PersistentKeepalive = {persistent_keepalive}\n"
         )
-

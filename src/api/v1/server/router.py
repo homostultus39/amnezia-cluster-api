@@ -7,7 +7,8 @@ from src.api.v1.server.schemas import (
     RestartServerResponse,
 )
 from src.services.host_service import HostService
-from src.services.traffic_receiver import TrafficReceiver
+from src.services.peers_service import get_peers_service
+from src.services.management.protocol_factory import get_available_protocols
 from src.management.settings import get_settings
 
 router = APIRouter(prefix="/server", tags=["Server"])
@@ -23,7 +24,7 @@ except Exception as exc:
     logger.critical(f"Failed to initialize HostService: {exc}")
     sys.exit(1)
 
-traffic_receiver = TrafficReceiver(settings.amnezia_container_name)
+peers_service = get_peers_service()
 
 
 @router.get("/status", response_model=ServerStatusResponse)
@@ -71,7 +72,11 @@ async def get_server_traffic() -> ServerTrafficResponse:
     Get total traffic statistics for the server.
     """
     try:
-        traffic_data = await traffic_receiver.get_total_traffic()
+        protocols = get_available_protocols()
+        if not protocols:
+            raise ValueError("No enabled protocols configured")
+
+        traffic_data = await peers_service.get_total_traffic(protocols[0])
 
         logger.info(
             f"Traffic retrieved: RX={traffic_data['total_rx_bytes']} "
