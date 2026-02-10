@@ -3,6 +3,7 @@ from fastapi import APIRouter, HTTPException, status
 from src.api.v1.peers.logger import logger
 from src.api.v1.peers.schemas import UpdatePeerRequest, UpdatePeerResponse
 from src.services.management.protocol_factory import create_protocol_service
+from src.api.v1.peers.utils import resolve_active_protocol_name
 
 
 router = APIRouter()
@@ -17,45 +18,10 @@ async def update_peer(
     public_key: str,
     payload: UpdatePeerRequest,
 ) -> UpdatePeerResponse:
-    """
-    Update peer configuration by recreating it with a new application type.
-
-    This endpoint removes the peer from the current configuration and creates a new one
-    with the specified app_type, preserving the allocated IP address.
-
-    Args:
-        public_key: The public key of the peer to update (in URL path)
-        payload: UpdatePeerRequest containing:
-            - app_type: New application type (amnezia_vpn or amnezia_wg)
-
-    Returns:
-        UpdatePeerResponse with old and new peer keys and configuration
-
-    Raises:
-        HTTPException 404: Peer not found
-        HTTPException 400: Invalid app_type
-        HTTPException 500: Protocol service error
-
-    Example:
-        Request:
-            PATCH /peers/PUBLIC_KEY_B64
-            {
-                "app_type": "amnezia_wg"
-            }
-
-        Response:
-            {
-                "old_public_key": "OLD_KEY_B64",
-                "new_public_key": "NEW_KEY_B64",
-                "allocated_ip": "10.8.1.5/32",
-                "app_type": "amnezia_wg",
-                "protocol": "amneziawg2",
-                "config": "[wireguard-config-text]",
-                "created_at": "2026-02-10T12:00:00Z"
-            }
-    """
+    """Recreate a peer with a new application type while preserving its allocated IP address."""
     try:
-        service = create_protocol_service("amneziawg2")
+        protocol_name = resolve_active_protocol_name()
+        service = create_protocol_service(protocol_name)
         peers_data = await service.get_peers()
 
         old_peer = None
@@ -109,5 +75,5 @@ async def update_peer(
         logger.error(f"Failed to update peer: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update peer configuration",
+            detail=str(exc),
         )

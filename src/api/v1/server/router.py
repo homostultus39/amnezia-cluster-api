@@ -9,7 +9,7 @@ from src.api.v1.server.schemas import (
 from src.services.host_service import HostService
 from src.services.management.protocol_factory import (
     create_protocol_service,
-    get_available_protocols,
+    get_active_protocol_name,
     get_protocol_config,
 )
 
@@ -31,40 +31,12 @@ except Exception as exc:
     status_code=status.HTTP_200_OK,
 )
 async def get_server_status() -> ServerStatusResponse:
-    """
-    Retrieve the current status of the Amnezia server.
-
-    Returns information about the container state, listening port, network interface,
-    and protocol in use.
-
-    Returns:
-        ServerStatusResponse with server status and configuration details
-
-    Raises:
-        HTTPException 500: Failed to retrieve container information
-
-    Example:
-        Request:
-            GET /server/status
-
-        Response:
-            {
-                "status": "running",
-                "container_name": "amnezia-awg2",
-                "port": 51820,
-                "interface": "awg0",
-                "protocol": "amneziawg2"
-            }
-    """
+    """Retrieve the current status of the Amnezia server including container state, port, and interface."""
     try:
-        available_protocols = get_available_protocols()
-        if not available_protocols:
-            raise ValueError("No protocols configured")
-
-        protocol_name = available_protocols[0]
+        protocol_name = get_active_protocol_name()
         protocol_config = get_protocol_config(protocol_name)
-        container_name = protocol_config.get("container_name", "amnezia-awg2")
-        interface = protocol_config.get("interface", "awg0")
+        container_name = protocol_config["container_name"]
+        interface = protocol_config["interface"]
 
         is_running = await host_service.is_container_running(container_name)
 
@@ -94,7 +66,7 @@ async def get_server_status() -> ServerStatusResponse:
         logger.error(f"Failed to get server status: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve server status",
+            detail=str(exc),
         )
 
 
@@ -104,36 +76,10 @@ async def get_server_status() -> ServerStatusResponse:
     status_code=status.HTTP_200_OK,
 )
 async def get_server_traffic() -> ServerTrafficResponse:
-    """
-    Retrieve total traffic statistics for all peers.
-
-    Returns aggregated traffic data showing total bytes transmitted and received,
-    as well as peer connection metrics.
-
-    Returns:
-        ServerTrafficResponse with traffic statistics
-
-    Raises:
-        HTTPException 500: Failed to retrieve traffic data
-
-    Example:
-        Request:
-            GET /server/traffic
-
-        Response:
-            {
-                "total_rx_bytes": 1048576,
-                "total_tx_bytes": 2097152,
-                "total_peers": 5,
-                "online_peers": 3
-            }
-    """
+    """Retrieve aggregated traffic statistics for all peers including bytes and connection metrics."""
     try:
-        available_protocols = get_available_protocols()
-        if not available_protocols:
-            raise ValueError("No protocols configured")
-
-        service = create_protocol_service(available_protocols[0])
+        protocol_name = get_active_protocol_name()
+        service = create_protocol_service(protocol_name)
         peers_data = await service.get_peers()
 
         total_rx_bytes = sum(peer.get("rx_bytes", 0) for peer in peers_data)
@@ -157,7 +103,7 @@ async def get_server_traffic() -> ServerTrafficResponse:
         logger.error(f"Failed to get server traffic: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to retrieve traffic statistics",
+            detail=str(exc),
         )
 
 
@@ -167,37 +113,11 @@ async def get_server_traffic() -> ServerTrafficResponse:
     status_code=status.HTTP_200_OK,
 )
 async def restart_server() -> RestartServerResponse:
-    """
-    Restart the Amnezia server container.
-
-    Stops and starts the container to reload configuration and reset connections.
-    Container must be running for restart to succeed.
-
-    Returns:
-        RestartServerResponse confirming successful restart
-
-    Raises:
-        HTTPException 400: Container is not running
-        HTTPException 500: Failed to restart container
-
-    Example:
-        Request:
-            POST /server/restart
-
-        Response:
-            {
-                "status": "restarted",
-                "message": "Server amnezia-awg2 has been restarted successfully"
-            }
-    """
+    """Restart the Amnezia server container to reload configuration and reset connections."""
     try:
-        available_protocols = get_available_protocols()
-        if not available_protocols:
-            raise ValueError("No protocols configured")
-
-        protocol_name = available_protocols[0]
+        protocol_name = get_active_protocol_name()
         protocol_config = get_protocol_config(protocol_name)
-        container_name = protocol_config.get("container_name", "amnezia-awg2")
+        container_name = protocol_config["container_name"]
 
         is_running = await host_service.is_container_running(container_name)
 
@@ -223,5 +143,5 @@ async def restart_server() -> RestartServerResponse:
         logger.error(f"Failed to restart server: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to restart server",
+            detail=str(exc),
         )

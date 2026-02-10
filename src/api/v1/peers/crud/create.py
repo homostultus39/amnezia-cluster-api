@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, status
 
 from src.api.v1.peers.logger import logger
-from src.api.v1.peers.schemas import CreatePeerRequest, CreatePeerResponse, AppType
+from src.api.v1.peers.schemas import CreatePeerRequest, CreatePeerResponse
 from src.services.management.protocol_factory import create_protocol_service
+from src.api.v1.peers.utils import resolve_active_protocol_name
 
 router = APIRouter()
 
@@ -13,43 +14,10 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
 )
 async def create_peer(payload: CreatePeerRequest) -> CreatePeerResponse:
-    """
-    Create a new peer with the specified application type.
-
-    Args:
-        payload: CreatePeerRequest containing:
-            - app_type: Application type (amnezia_vpn or amnezia_wg)
-            - allocated_ip: Optional IP address. If not provided, automatically allocated from subnet
-
-    Returns:
-        CreatePeerResponse with peer configuration details
-
-    Raises:
-        HTTPException 400: Invalid app_type or IP allocation failure
-        HTTPException 500: Protocol service error or configuration generation failure
-
-    Example:
-        Request:
-            POST /peers/
-            {
-                "app_type": "amnezia_vpn",
-                "allocated_ip": "10.8.1.5"
-            }
-
-        Response:
-            {
-                "public_key": "PUBLIC_KEY_B64",
-                "private_key": "PRIVATE_KEY_B64",
-                "allocated_ip": "10.8.1.5/32",
-                "endpoint": "vpn.example.com:51820",
-                "app_type": "amnezia_vpn",
-                "protocol": "amneziawg2",
-                "config": "vpn://[base64-encoded-json]",
-                "created_at": "2026-02-10T12:00:00Z"
-            }
-    """
+    """Create a new peer with the specified application type and optional IP allocation."""
     try:
-        service = create_protocol_service("amneziawg2")
+        protocol_name = resolve_active_protocol_name()
+        service = create_protocol_service(protocol_name)
 
         result = await service.create_peer(
             app_type=payload.app_type.value,
@@ -81,5 +49,5 @@ async def create_peer(payload: CreatePeerRequest) -> CreatePeerResponse:
         logger.error(f"Failed to create peer: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create peer configuration",
+            detail=str(exc),
         )

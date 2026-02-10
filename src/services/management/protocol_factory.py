@@ -21,20 +21,30 @@ def load_protocol_config(config_path: str | None = None) -> None:
     config_file = Path(config_path)
     _protocol_config.clear()
     if not config_file.exists():
-        logger.warning(f"Protocol config file {config_path} not found, using defaults")
-        _protocol_config["amneziawg2"] = {
-            "service_class": "src.services.protocols.amneziawg2.amneziawg2_service.AmneziaWG2Service",
-            "enabled": True,
-        }
-        return
+        raise FileNotFoundError(f"Protocol config file not found: {config_file.resolve()}")
 
     try:
         with open(config_file, "r") as file_handle:
             config = yaml.safe_load(file_handle) or {}
             protocols = config.get("protocols", {})
+            if not protocols:
+                raise ValueError(
+                    f"Protocol config {config_file.resolve()} does not define any protocols"
+                )
+
             normalized_protocols = {
                 str(name).lower(): value for name, value in protocols.items()
             }
+            for protocol_name, protocol_cfg in normalized_protocols.items():
+                if not isinstance(protocol_cfg, dict):
+                    raise ValueError(
+                        f"Protocol {protocol_name} config must be a mapping"
+                    )
+                if not protocol_cfg.get("service_class"):
+                    raise ValueError(
+                        f"Protocol {protocol_name} is missing required field: service_class"
+                    )
+
             _protocol_config.update(normalized_protocols)
             logger.info(f"Loaded {len(_protocol_config)} protocol(s) from {config_path}")
     except Exception as exc:
@@ -55,6 +65,13 @@ def get_available_protocols() -> list[str]:
         for name, config in _protocol_config.items()
         if config.get("enabled", True)
     ]
+
+
+def get_active_protocol_name() -> str:
+    available = get_available_protocols()
+    if not available:
+        raise ValueError("No enabled protocols configured")
+    return available[0]
 
 
 def get_protocol_config(protocol_name: str) -> dict:

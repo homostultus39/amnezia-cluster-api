@@ -6,12 +6,18 @@ from src.api.v1.peers.router import router as peers_router
 from src.api.v1.server.router import router as server_router
 from src.api.v1.deps.middlewares.auth import get_current_api_key
 from src.management.security import get_api_key_storage
+from src.services.management.protocol_factory import (
+    get_available_protocols,
+    load_protocol_config,
+)
 
 logger = configure_logger("MAIN", "cyan")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Amnezia API...")
+    load_protocol_config()
+    logger.info(f"Loaded protocols: {get_available_protocols()}")
     api_key = get_api_key_storage().get_api_key()
     logger.info(f"The API key was successfully installed: {api_key}")
     yield
