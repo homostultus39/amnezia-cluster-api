@@ -1,36 +1,65 @@
 from datetime import datetime
 from typing import Optional
-from uuid import UUID
+from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from src.database.models import AppType
 
+class AppType(str, Enum):
+    """Types of applications for creating new peers"""
+    AMNEZIA_VPN = "amnezia_vpn"
+    AMNEZIA_WG = "amnezia_wg"
 
 class CreatePeerRequest(BaseModel):
-    client_id: Optional[UUID] = None
-    username: Optional[str] = None
-    app_type: AppType
-    protocol: str = "amneziawg"
+    app_type: AppType = Field(..., description="Application type for peer configuration")
+    allocated_ip: Optional[str] = Field(
+        None,
+        description="IP address to allocate to the peer. If not provided, auto-allocated from subnet"
+    )
 
 
-class PeerResponse(BaseModel):
-    id: str
-    client_id: str
-    username: str
+class CreatePeerResponse(BaseModel):
+    public_key: str
+    private_key: str
+    allocated_ip: str
+    endpoint: str
     app_type: str
     protocol: str
-    endpoint: str
+    config: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class ListPeerResponse(BaseModel):
     public_key: str
-    online: bool
-    last_handshake: Optional[datetime]
-    url: str
+    allocated_ip: str
+    app_type: Optional[str] = None
+    protocol: str
+    endpoint: str
+    is_online: bool = Field(alias="online")
+    last_handshake: Optional[datetime] = None
+    rx_bytes: int = 0
+    tx_bytes: int = 0
+    created_at: Optional[datetime] = None
+
+    class Config:
+        populate_by_name = True
 
 
 class UpdatePeerRequest(BaseModel):
-    app_type: Optional[AppType] = None
-    protocol: Optional[str] = None
+    app_type: AppType = Field(..., description="New application type for peer configuration")
+
+
+class UpdatePeerResponse(BaseModel):
+    old_public_key: str
+    new_public_key: str
+    allocated_ip: str
+    app_type: str
+    protocol: str
+    config: str
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class DeletePeerResponse(BaseModel):
-    status: str
+    status: str = "deleted"
+    public_key: str
+    message: str = "Peer successfully removed from configuration"

@@ -1,158 +1,101 @@
-from uuid import UUID
-from fastapi import APIRouter, HTTPException, Query, status
-from sqlalchemy.exc import SQLAlchemyError
+from typing import Optional, List
+
+from fastapi import APIRouter, HTTPException, status
 
 from src.api.v1.peers.logger import logger
-from src.api.v1.peers.schemas import PeerResponse
-from src.database.connection import SessionDep
-from src.database.management.operations.protocol import get_protocol_by_name
-from src.database.management.operations.peer import get_all_peers_by_protocol_with_client
-from src.database.management.operations.client import get_client_by_id_with_peers
-from src.services.management.config_storage import get_config_object_name
-from src.minio.client import MinioClient
-from src.services.amnezia_service import AmneziaService
-from src.management.settings import get_settings
+from src.api.v1.peers.schemas import ListPeerResponse, AppType
+from src.services.management.protocol_factory import create_protocol_service
 
 router = APIRouter()
-settings = get_settings()
-minio_client = MinioClient()
-amnezia_service = AmneziaService()
 
 
-@router.get("/", response_model=list[PeerResponse])
-async def get_peers(
-    session: SessionDep,
-    protocol: str | None = Query(default=None),
-    online: bool | None = Query(default=None),
-) -> list[PeerResponse]:
+@router.get(
+    "/",
+    response_model=List[ListPeerResponse],
+    status_code=status.HTTP_200_OK,
+)
+async def list_peers(
+    app_type: Optional[str] = None,
+    online_only: Optional[bool] = False,
+) -> List[ListPeerResponse]:
     """
-    Retrieve all peers with optional filters.
+    List all peers with their current status and traffic statistics.
+
+    Args:
+        app_type: Optional filter by application type (amnezia_vpn or amnezia_wg)
+        online_only: If true, return only online peers. Defaults to false
+
+    Returns:
+        List of ListPeerResponse objects with peer information
+
+    Raises:
+        HTTPException 400: Invalid app_type filter
+        HTTPException 500: Protocol service error
+
+    Example:
+        Request:
+            GET /peers/
+            GET /peers/?app_type=amnezia_vpn&online_only=true
+
+        Response:
+            [
+                {
+                    "public_key": "PUBLIC_KEY_B64",
+                    "allocated_ip": "10.8.1.5/32",
+                    "app_type": "amnezia_vpn",
+                    "protocol": "amneziawg2",
+                    "endpoint": "vpn.example.com:51820",
+                    "is_online": true,
+                    "last_handshake": "2026-02-10T12:00:00Z",
+                    "rx_bytes": 1024000,
+                    "tx_bytes": 2048000,
+                    "created_at": "2026-02-10T10:00:00Z"
+                }
+            ]
     """
     try:
-        protocol_name = protocol or settings.default_protocol
-        protocol_model = await get_protocol_by_name(session, protocol_name)
+        if app_type:
+            try:
+                AppType(app_type)
+            except ValueError:
+                raise ValueError(f"Invalid app_type: {app_type}")
 
-        if not protocol_model:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Protocol {protocol_name} not found",
-            )
+        service = create_protocol_service("amneziawg2")
+        peers_data = await service.get_peers()
 
-        peers = await get_all_peers_by_protocol_with_client(session, protocol_model.id)
-
-        wg_dump = await amnezia_service.connection.get_wg_dump()
-        peers_data = amnezia_service._parse_wg_dump(wg_dump)
-
-        peer_responses = []
-        for peer in peers:
-            wg_peer = peers_data.get(peer.public_key, {})
-            is_online = wg_peer.get("online", False)
-
-            if online is not None and is_online != online:
+        peers = []
+        for peer in peers_data:
+            if app_type and peer.get("app_type") != app_type:
                 continue
 
-            object_name = get_config_object_name(protocol_name, peer.client_id, peer.app_type)
-            try:
-                config_url = await minio_client.presigned_get_url(object_name)
-            except Exception:
-                config_url = None
+            if online_only and not peer.get("online"):
+                continue
 
-            peer_responses.append(
-                PeerResponse(
-                    id=str(peer.id),
-                    client_id=str(peer.client_id),
-                    username=peer.client.username,
-                    app_type=peer.app_type,
-                    protocol=protocol_name,
-                    endpoint=wg_peer.get("endpoint") or peer.endpoint,
-                    public_key=peer.public_key,
-                    online=is_online,
-                    last_handshake=wg_peer.get("last_handshake"),
-                    url=config_url or "",
+            peers.append(
+                ListPeerResponse(
+                    public_key=peer["public_key"],
+                    allocated_ip=peer["allowed_ips"][0] if peer.get("allowed_ips") else "N/A",
+                    protocol="amneziawg2",
+                    endpoint=peer.get("endpoint") or "N/A",
+                    online=peer.get("online", False),
+                    last_handshake=peer.get("last_handshake"),
+                    rx_bytes=peer.get("rx_bytes", 0),
+                    tx_bytes=peer.get("tx_bytes", 0),
                 )
             )
 
-        logger.info(f"Retrieved {len(peer_responses)} peers")
-        return peer_responses
+        logger.info(f"Listed {len(peers)} peers")
+        return peers
 
-    except HTTPException:
-        raise
-    except SQLAlchemyError as exc:
-        logger.error(f"Database error: {exc}")
+    except ValueError as exc:
+        logger.error(f"Validation error: {exc}")
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database connection error",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
         )
     except Exception as exc:
-        logger.error(f"Unexpected error: {exc}")
+        logger.error(f"Failed to list peers: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve peers: {str(exc)}",
-        )
-
-
-@router.get("/client/{client_id}", response_model=list[PeerResponse])
-async def get_client_peers(
-    client_id: UUID,
-    session: SessionDep,
-    protocol: str | None = Query(default=None),
-) -> list[PeerResponse]:
-    """
-    Retrieve all peers for a specific client.
-    """
-    try:
-        client = await get_client_by_id_with_peers(session, client_id)
-
-        if not client:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Client {client_id} not found",
-            )
-
-        wg_dump = await amnezia_service.connection.get_wg_dump()
-        peers_data = amnezia_service._parse_wg_dump(wg_dump)
-
-        protocol_name = protocol or settings.default_protocol
-
-        peer_responses = []
-        for peer in client.peers:
-            wg_peer = peers_data.get(peer.public_key, {})
-
-            object_name = get_config_object_name(protocol_name, peer.client_id, peer.app_type)
-            try:
-                config_url = await minio_client.presigned_get_url(object_name)
-            except Exception:
-                config_url = None
-
-            peer_responses.append(
-                PeerResponse(
-                    id=str(peer.id),
-                    client_id=str(client.id),
-                    username=client.username,
-                    app_type=peer.app_type,
-                    protocol=protocol_name,
-                    endpoint=wg_peer.get("endpoint") or peer.endpoint,
-                    public_key=peer.public_key,
-                    online=wg_peer.get("online", False),
-                    last_handshake=wg_peer.get("last_handshake"),
-                    url=config_url or "",
-                )
-            )
-
-        logger.info(f"Retrieved {len(peer_responses)} peers for client {client_id}")
-        return peer_responses
-
-    except HTTPException:
-        raise
-    except SQLAlchemyError as exc:
-        logger.error(f"Database error: {exc}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database connection error",
-        )
-    except Exception as exc:
-        logger.error(f"Unexpected error: {exc}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve client peers: {str(exc)}",
+            detail="Failed to retrieve peers",
         )

@@ -7,9 +7,9 @@ class Settings(BaseSettings):
 
     server_public_host: str
     server_display_name: str = "AmneziaWG Server"
- 
+
     admin_api_key: str | None = None
-    
+
     cluster_id: str = "default"
     protocol_config_path: str = "src/management/protocols.yaml"
     persistent_keepalive_seconds: int = 25

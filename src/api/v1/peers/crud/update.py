@@ -1,107 +1,112 @@
-from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.v1.peers.logger import logger
-from src.api.v1.peers.schemas import UpdatePeerRequest, PeerResponse
-from src.database.connection import SessionDep
-from src.database.management.operations.peer import get_peer_by_id_with_client
-from src.services.management.config_storage import get_config_object_name
-from src.minio.client import MinioClient
-from src.services.peers_service import PeersService
-from src.services.amnezia_service import AmneziaService
-from src.management.settings import get_settings
+from src.api.v1.peers.schemas import UpdatePeerRequest, UpdatePeerResponse
+from src.services.management.protocol_factory import create_protocol_service
 
 router = APIRouter()
-settings = get_settings()
-peers_service = PeersService()
-minio_client = MinioClient()
-amnezia_service = AmneziaService()
 
 
-@router.patch("/{peer_id}", response_model=PeerResponse)
+@router.patch(
+    "/{public_key}",
+    response_model=UpdatePeerResponse,
+    status_code=status.HTTP_200_OK,
+)
 async def update_peer(
-    peer_id: UUID,
-    session: SessionDep,
+    public_key: str,
     payload: UpdatePeerRequest,
-) -> PeerResponse:
+) -> UpdatePeerResponse:
     """
-    Update a peer by removing the old configuration and creating a new one.
+    Update peer configuration by recreating it with a new application type.
+
+    This endpoint removes the peer from the current configuration and creates a new one
+    with the specified app_type, preserving the allocated IP address.
+
+    Args:
+        public_key: The public key of the peer to update (in URL path)
+        payload: UpdatePeerRequest containing:
+            - app_type: New application type (amnezia_vpn or amnezia_wg)
+
+    Returns:
+        UpdatePeerResponse with old and new peer keys and configuration
+
+    Raises:
+        HTTPException 404: Peer not found
+        HTTPException 400: Invalid app_type
+        HTTPException 500: Protocol service error
+
+    Example:
+        Request:
+            PATCH /peers/PUBLIC_KEY_B64
+            {
+                "app_type": "amnezia_wg"
+            }
+
+        Response:
+            {
+                "old_public_key": "OLD_KEY_B64",
+                "new_public_key": "NEW_KEY_B64",
+                "allocated_ip": "10.8.1.5/32",
+                "app_type": "amnezia_wg",
+                "protocol": "amneziawg2",
+                "config": "[wireguard-config-text]",
+                "created_at": "2026-02-10T12:00:00Z"
+            }
     """
     try:
-        peer = await get_peer_by_id_with_client(session, peer_id)
+        service = create_protocol_service("amneziawg2")
+        peers_data = await service.get_peers()
 
-        if not peer:
+        old_peer = None
+        for peer in peers_data:
+            if peer["public_key"] == public_key:
+                old_peer = peer
+                break
+
+        if not old_peer:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Peer {peer_id} not found",
+                detail=f"Peer {public_key[:16]}... not found",
             )
 
-        if not payload.app_type and not payload.protocol:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="At least one field must be provided for update",
-            )
-
-        old_app_type = peer.app_type
-        old_protocol = settings.default_protocol
-        client = peer.client
-
-        await amnezia_service.remove_peer_from_config(peer.public_key)
-        await amnezia_service.connection.sync_wg_config()
-
-        await session.delete(peer)
-        await session.flush()
-
-        new_app_type = payload.app_type.value if payload.app_type else old_app_type
-        new_protocol = payload.protocol if payload.protocol else old_protocol
-
-        service = peers_service._get_service(new_protocol)
-        new_peer_data = await service.create_peer(
-            session=session,
-            client=client,
-            app_type=new_app_type,
+        old_allocated_ip = (
+            old_peer["allowed_ips"][0]
+            if old_peer.get("allowed_ips")
+            else None
         )
 
-        new_peer = new_peer_data["peer"]
-        wg_dump = await service.connection.get_wg_dump()
-        peers_data = service._parse_wg_dump(wg_dump)
+        await service.delete_peer(public_key)
 
-        await session.commit()
+        result = await service.create_peer(
+            app_type=payload.app_type.value,
+            allocated_ip=old_allocated_ip,
+        )
 
-        object_name = get_config_object_name(new_protocol, client.id, new_app_type)
-        config_url = await minio_client.presigned_get_url(object_name)
+        logger.info(
+            f"Peer {public_key[:16]}... updated: "
+            f"{result['app_type']} ip={result['allocated_ip']}"
+        )
 
-        wg_peer = peers_data.get(new_peer.public_key, {})
-
-        logger.info(f"Peer {peer_id} updated successfully")
-
-        return PeerResponse(
-            id=str(new_peer.id),
-            client_id=str(client.id),
-            username=client.username,
-            app_type=new_app_type,
-            protocol=new_protocol,
-            endpoint=wg_peer.get("endpoint") or new_peer.endpoint,
-            public_key=new_peer.public_key,
-            online=wg_peer.get("online", False),
-            last_handshake=wg_peer.get("last_handshake"),
-            url=config_url,
+        return UpdatePeerResponse(
+            old_public_key=public_key,
+            new_public_key=result["public_key"],
+            allocated_ip=result["allocated_ip"],
+            app_type=result["app_type"],
+            protocol=result["protocol"],
+            config=result["config"],
         )
 
     except HTTPException:
         raise
-    except SQLAlchemyError as exc:
-        logger.error(f"Database error: {exc}")
-        await session.rollback()
+    except ValueError as exc:
+        logger.error(f"Validation error: {exc}")
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database connection error",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
         )
     except Exception as exc:
-        logger.error(f"Unexpected error: {exc}")
-        await session.rollback()
+        logger.error(f"Failed to update peer: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to update peer: {str(exc)}",
+            detail="Failed to update peer configuration",
         )

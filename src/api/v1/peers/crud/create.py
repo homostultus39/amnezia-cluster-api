@@ -1,91 +1,86 @@
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from src.api.v1.peers.logger import logger
-from src.api.v1.peers.schemas import CreatePeerRequest, PeerResponse
-from src.database.connection import SessionDep
-from src.services.management.config_storage import get_config_object_name
-from src.minio.client import MinioClient
-from src.services.peers_service import PeersService
+from src.api.v1.peers.schemas import CreatePeerRequest, CreatePeerResponse
+from src.management.constants import AppType
+from src.services.management.protocol_factory import create_protocol_service
 
 router = APIRouter()
-peers_service = PeersService()
-minio_client = MinioClient()
 
 
-@router.post("/", response_model=PeerResponse)
-async def create_peer(
-    session: SessionDep,
-    payload: CreatePeerRequest,
-) -> PeerResponse:
+@router.post(
+    "/",
+    response_model=CreatePeerResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_peer(payload: CreatePeerRequest) -> CreatePeerResponse:
     """
-    Create a new peer for an existing client.
+    Create a new peer with the specified application type.
+
+    Args:
+        payload: CreatePeerRequest containing:
+            - app_type: Application type (amnezia_vpn or amnezia_wg)
+            - allocated_ip: Optional IP address. If not provided, automatically allocated from subnet
+
+    Returns:
+        CreatePeerResponse with peer configuration details
+
+    Raises:
+        HTTPException 400: Invalid app_type or IP allocation failure
+        HTTPException 500: Protocol service error or configuration generation failure
+
+    Example:
+        Request:
+            POST /peers/
+            {
+                "app_type": "amnezia_vpn",
+                "allocated_ip": "10.8.1.5"
+            }
+
+        Response:
+            {
+                "public_key": "PUBLIC_KEY_B64",
+                "private_key": "PRIVATE_KEY_B64",
+                "allocated_ip": "10.8.1.5/32",
+                "endpoint": "vpn.example.com:51820",
+                "app_type": "amnezia_vpn",
+                "protocol": "amneziawg2",
+                "config": "vpn://[base64-encoded-json]",
+                "created_at": "2026-02-10T12:00:00Z"
+            }
     """
     try:
-        client = await peers_service.resolve_client(
-            session=session,
-            client_id=payload.client_id,
-            username=payload.username,
+        service = create_protocol_service("amneziawg2")
+
+        result = await service.create_peer(
+            app_type=payload.app_type.value,
+            allocated_ip=payload.allocated_ip,
         )
 
-        service = peers_service._get_service(payload.protocol)
-
-        peer_data = await service.create_peer(
-            session=session,
-            client=client,
-            app_type=payload.app_type.value,
+        logger.info(
+            f"Peer created: {result['public_key'][:16]}... "
+            f"app_type={result['app_type']} ip={result['allocated_ip']}"
         )
 
-        peer = peer_data["peer"]
-        wg_dump = await service.connection.get_wg_dump()
-        peers_data = service._parse_wg_dump(wg_dump)
-
-        await session.commit()
-
-        object_name = get_config_object_name(payload.protocol, client.id, payload.app_type.value)
-        config_url = await minio_client.presigned_get_url(object_name)
-
-        wg_peer = peers_data.get(peer.public_key, {})
-
-        logger.info(f"Peer created for client {client.username}: {payload.app_type.value}")
-
-        return PeerResponse(
-            id=str(peer.id),
-            client_id=str(client.id),
-            username=client.username,
-            app_type=payload.app_type.value,
-            protocol=payload.protocol,
-            endpoint=wg_peer.get("endpoint") or peer.endpoint,
-            public_key=peer.public_key,
-            online=wg_peer.get("online", False),
-            last_handshake=wg_peer.get("last_handshake"),
-            url=config_url,
+        return CreatePeerResponse(
+            public_key=result["public_key"],
+            private_key=result["private_key"],
+            allocated_ip=result["allocated_ip"],
+            endpoint=result["endpoint"],
+            app_type=result["app_type"],
+            protocol=result["protocol"],
+            config=result["config"],
         )
 
     except ValueError as exc:
-        logger.error(f"Validation error during peer creation: {exc}")
+        logger.error(f"Validation error: {exc}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(exc),
         )
-    except IntegrityError as exc:
-        logger.error(f"Integrity error: {exc}")
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Peer with this app_type already exists for this client",
-        )
-    except SQLAlchemyError as exc:
-        logger.error(f"Database error: {exc}")
-        await session.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Database connection error",
-        )
     except Exception as exc:
-        logger.error(f"Unexpected error during peer creation: {exc}")
-        await session.rollback()
+        logger.error(f"Failed to create peer: {exc}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create peer: {str(exc)}",
+            detail="Failed to create peer configuration",
         )
