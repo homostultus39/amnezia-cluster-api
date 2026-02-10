@@ -10,16 +10,14 @@ router = APIRouter()
 
 
 @router.patch(
-    "/{public_key}",
+    "/",
     response_model=UpdatePeerResponse,
     status_code=status.HTTP_200_OK,
 )
-async def update_peer(
-    public_key: str,
-    payload: UpdatePeerRequest,
-) -> UpdatePeerResponse:
+async def update_peer(payload: UpdatePeerRequest) -> UpdatePeerResponse:
     """Recreate a peer with a new application type while preserving its allocated IP address."""
     try:
+        public_key = payload.public_key.strip()
         protocol_name = resolve_active_protocol_name()
         service = create_protocol_service(protocol_name)
         peers_data = await service.get_peers()

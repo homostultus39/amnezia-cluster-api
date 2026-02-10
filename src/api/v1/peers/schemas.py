@@ -42,6 +42,7 @@ class ListPeerResponse(BaseModel):
 
 
 class UpdatePeerRequest(BaseModel):
+    public_key: str = Field(..., description="Public key of peer to update")
     app_type: AppType = Field(..., description="New application type for peer configuration")
 
 
@@ -59,3 +60,7 @@ class DeletePeerResponse(BaseModel):
     status: str = "deleted"
     public_key: str
     message: str = "Peer successfully removed from configuration"
+
+
+class DeletePeerRequest(BaseModel):
+    public_key: str = Field(..., description="Public key of peer to delete")
