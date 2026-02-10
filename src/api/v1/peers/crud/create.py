@@ -14,14 +14,13 @@ router = APIRouter()
     status_code=status.HTTP_201_CREATED,
 )
 async def create_peer(payload: CreatePeerRequest) -> CreatePeerResponse:
-    """Create a new peer with the specified application type and optional IP allocation."""
+    """Create a new peer with automatic IP allocation."""
     try:
         protocol_name = resolve_active_protocol_name()
         service = create_protocol_service(protocol_name)
 
         result = await service.create_peer(
             app_type=payload.app_type.value,
-            allocated_ip=payload.allocated_ip,
         )
 
         logger.info(

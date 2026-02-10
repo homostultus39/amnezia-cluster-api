@@ -12,10 +12,6 @@ class AppType(str, Enum):
 
 class CreatePeerRequest(BaseModel):
     app_type: AppType = Field(..., description="Application type for peer configuration")
-    allocated_ip: Optional[str] = Field(
-        None,
-        description="IP address to allocate to the peer. If not provided, auto-allocated from subnet"
-    )
 
 
 class CreatePeerResponse(BaseModel):
