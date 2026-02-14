@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from src.management.logger import configure_logger
 from src.management.settings import get_settings
+from src.management.security import get_api_key_storage
 from src.services.host_service import HostService
 from src.services.management.protocol_factory import (
     create_protocol_service,
@@ -107,15 +108,13 @@ class PeersService:
     async def sync_peers_status(
         self,
         central_api_url: str | None = None,
-        api_key: str | None = None,
         protocols: list[str] | None = None,
     ) -> int:
         sync_url = (central_api_url or self.settings.central_api_url or "").strip()
-        sync_api_key = (api_key or self.settings.central_cluster_api_key or "").strip()
-        cluster_id = (self.settings.cluster_id or "").strip()
+        sync_api_key = get_api_key_storage().get_api_key().strip()
 
-        if not sync_url or not sync_api_key or not cluster_id:
-            logger.debug("Sync skipped: CENTRAL_API_URL/CENTRAL_CLUSTER_API_KEY/CLUSTER_ID are not fully configured")
+        if not sync_url or not sync_api_key:
+            logger.debug("Sync skipped: CENTRAL_API_URL or ADMIN_API_KEY is not configured")
             return 0
 
         target_protocols = protocols or get_available_protocols()
@@ -131,15 +130,12 @@ class PeersService:
             return 0
 
         headers = {"X-API-Key": sync_api_key}
-        bearer_token = (self.settings.central_admin_bearer_token or "").strip()
-        if bearer_token:
-            headers["Authorization"] = f"Bearer {bearer_token}"
 
         sync_base_url = sync_url.rstrip("/")
         async with httpx.AsyncClient(timeout=30.0) as client:
             for payload in payloads:
                 response = await client.post(
-                    f"{sync_base_url}/clusters/{cluster_id}/sync",
+                    f"{sync_base_url}/clusters/sync",
                     json=payload,
                     headers=headers,
                 )
