@@ -1,4 +1,3 @@
-version: '3.2' # deprecated, указал, чтоб докер на впске не ругался
 services:
   api:
     build:
