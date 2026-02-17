@@ -10,4 +10,5 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /opt/amnezia:/opt/amnezia:rw
+      - ./.env:/app/.env:rw
     restart: always
