@@ -128,7 +128,7 @@ async def restart_server() -> RestartServerResponse:
                 detail=f"Container {container_name} is not running",
             )
 
-        await host_service.run_command(f"docker restart {container_name}", timeout=10000)
+        await host_service.restart_container(container_name, timeout=10)
 
         logger.info(f"Server {container_name} restarted successfully")
 

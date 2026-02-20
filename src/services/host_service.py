@@ -90,6 +90,16 @@ class HostService:
             logger.warning(f"Failed to get port for container {container_name}: {e}")
             return None
 
+    async def restart_container(self, container_name: str, timeout: int = 10) -> None:
+        try:
+            container = await asyncio.to_thread(self.docker_client.containers.get, container_name)
+            await asyncio.to_thread(container.restart, timeout=timeout)
+            logger.info(f"Container {container_name} restarted successfully")
+        except docker.errors.NotFound:
+            raise RuntimeError(f"Container {container_name} not found")
+        except Exception as exc:
+            raise RuntimeError(f"Failed to restart container {container_name}: {exc}")
+
     async def read_file(self, path: str) -> str:
         stdout, _ = await self.run_command(f"cat {path}")
         return stdout
