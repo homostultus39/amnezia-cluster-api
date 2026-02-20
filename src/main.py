@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Amnezia API",
+    title="Amnezia Cluster API",
     version="1.0.0",
     lifespan=lifespan,
     root_path="/api/v1",
